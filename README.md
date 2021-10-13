@@ -6,6 +6,6 @@ To make it work, you need to have installed your local postgresql database on po
 In powershell\unix console use these commands:
 ```
 docker build --tag movies .
-docker run
+docker run movies
 ```
 
