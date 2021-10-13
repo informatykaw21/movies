@@ -1,24 +1,68 @@
 import psycopg2 as pg 
 import pandas as pd
+import urllib.request
+import zipfile
+import csv
+
+print("IMPORTING FILES")
+
+url = "https://files.grouplens.org/datasets/movielens/ml-latest-small.zip"
+extract_dir = "files"
+
+zip_path, _ = urllib.request.urlretrieve(url)
+with zipfile.ZipFile(zip_path, "r") as f:
+    f.extractall(extract_dir)
+
+print("CONNECTING TO DB")
 
 DBCONFIGFILE = 'credentials.txt'
 with open(DBCONFIGFILE) as f:
     dbconfig=f.read()
 con=pg.connect(dbconfig)
-'''def create_server_connection(credentials):
-    con = None
-    try:
-		with open(credentials) as f:
-			dbconfig=f.read()
-        con = pg.connect(dbconfig)
-		
-        print("PgSQL Database connection successful")
-    except:
-        print("Error")
+cur = con.cursor()
 
-    return connection
-create_server_connection(DBCONFIGFILE)'''
+print("CREATING TABLES IN DB")
 
+cur.execute('drop table if exists movies, ratings')
+
+create_movies_table='CREATE TABLE if not exists movies \
+(movieid integer, \
+title character varying, \
+genres character varying);'
+
+cur.execute(create_movies_table)
+  
+create_ratings_table = 'CREATE TABLE  if not exists ratings \
+(movieid integer, \
+userid integer, \
+rating double precision, \
+"timestamp" character varying);'
+
+cur.execute(create_ratings_table)
+
+print("IMPORTING CSV TO TABLES IN DB")
+
+with open('files/ml-latest-small/movies.csv', 'r', encoding="UTF-8") as f:
+    reader = csv.reader(f, delimiter=',')
+    next(reader) # Skip the header row.
+    for row in reader:
+        cur.execute(
+        "INSERT INTO movies  (movieid,title,genres) VALUES (%s, %s, %s)",
+        row
+    )
+
+with open('files/ml-latest-small/ratings.csv', 'r', encoding="UTF-8") as f:
+    reader = csv.reader(f, delimiter=',')
+    next(reader) # Skip the header row.
+    for row in reader:
+        cur.execute(
+        "INSERT INTO ratings (movieid,userid,rating,timestamp) VALUES (%s, %s, %s, %s)",
+        row
+    )
+
+con.commit()
+
+print("SENDING SQL QUERIES")
 pr1="1. How many movies are in data set?"
 q1="select count(distinct title) from movies;"
 pr2= "2. What is the most common genre of movie?"
@@ -76,8 +120,10 @@ def read_query(con, query):
     except:
         print("Error")
 for pair in tasks:
-    results = read_query(con, pair[1])
-    df=pd.DataFrame(results)
-    print(pair[0], df)
-  
+    result=pd.read_sql(pair[1], con)
+    print(pair[0], '\n', result, '\n')
 
+cur.close()
+con.close()
+
+print("THE END")
